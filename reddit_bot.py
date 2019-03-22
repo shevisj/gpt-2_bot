@@ -65,8 +65,37 @@ def clean_response(resp, inp, user=None):
             break
     return str(pref + iop + "\n" + out + "\nBeep boop, I'm a bot.")
 
+m_guy = False
+
 def run(lock, n_threads, log):
-    def do_work(comment, lock, log, rexp):
+    def message_guy(reddit, lock, log):
+        global m_guy
+        m_guy = True
+        for message in reddit.inbox.unread(limit=None):
+            if isinstance(message, praw.models.Message):
+                cb = ""
+                for line in message.body.splitlines():
+                    if line.strip():
+                        insensitive_hippo = re.compile(re.escape('**INPUT(.*):**'), re.IGNORECASE)
+                        insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
+                        cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', line))))
+                cb = clean_input(cb)
+
+                if len(cb.strip()) < 2:
+                    log("Parent comment was empty")
+                    return
+
+                lock.acquire()
+                response = clean_response(get_response(cb), cb)
+                log("Bot replying to direct message: "+cb)
+                log("Response : "+response+"\n------------------------------------------------")
+                lock.release()
+                message.reply(response)
+                message.mark_read()
+
+    def do_work(comment, lock, log, rexp, reddit):
+        if not m_guy:
+            message_guy(reddit, lock, log)
         if not isinstance(comment, praw.models.Comment):
             return
         if comment.author is None or comment.author.name == "GPT-2_Bot":
@@ -99,11 +128,15 @@ def run(lock, n_threads, log):
                 insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
                 cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', line))))
         cb = clean_input(cb)
-        cpl = "https://www.reddit.com" + comment.permalink
+        cpl = "https://www.reddit.com" + cp.permalink
+
+        if len(cb.strip()) < 2:
+            log("Parent comment was empty")
+            return
 
         lock.acquire()
-        log("Bot replying to : "+cb+"\nURL : "+cpl)
         response = clean_response(get_response(cb), cb, comment.author)
+        log("Bot replying to : "+cb+"\nURL : "+cpl)
         log("Response : "+response+"\n------------------------------------------------")
         lock.release()
         cp.reply(response)
@@ -115,9 +148,10 @@ def run(lock, n_threads, log):
     submission.comments.replace_more(limit=None)
     rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
     with parallel_backend('threading', n_jobs=n_threads):
-        Parallel()(delayed(do_work)(comment, lock, log, rexp) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
-
-    log("DONE!!!\n\n============================================================\n")
+        Parallel()(delayed(do_work)(comment, lock, log, rexp, reddit) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
+    global m_guy
+    m_guy = False
+    log("DONE!!!\n\n============================================================\n", flush=True)
 
 
 lt = time.time() - 900
@@ -168,11 +202,15 @@ def run_mt(lock, n_threads, log):
                 insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
                 cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', line.strip())))) + "\n"
         cb = clean_input(cb)
-        cpl = "https://www.reddit.com" + comment.permalink
+        cpl = "https://www.reddit.com" + cp.permalink
+
+        if len(cb.strip()) < 1:
+            log("Parent comment was empty")
+            return
 
         lock.acquire()
-        log("Bot replying to : "+cb+"\nURL : "+cpl)
         response = clean_response(get_response(cb), cb, comment.author)
+        log("Bot replying to : "+cb+"\nURL : "+cpl)
         log("Response : "+response+"\n------------------------------------------------")
         lock.release()
         cp.reply(response)
@@ -194,14 +232,19 @@ def run_mt(lock, n_threads, log):
 
 with open("./reddit_bot_logs.txt", 'a') as log:
     w = sys.stdout.write
-    def wlog(str):
+    def wlog(str, flush=False):
         str += "\n"
         w(str)
         log.write(str)
+        if flush:
+            log.flush()
     print("START")
     g_lock = Lock()
-    try:
-        while True:
+    while True:
+        try:
             run_mt(g_lock, 32, wlog)
-    except KeyboardInterrupt:
-        wlog("\nUser pressed ctrl-c...")
+        except KeyboardInterrupt:
+            wlog("\nUser pressed ctrl-c...")
+            break
+        except:
+            wlog("\nUnspecified error during run. Restarting...")
