@@ -201,6 +201,7 @@ with open("./reddit_bot_logs.txt", 'a') as log:
     print("START")
     g_lock = Lock()
     try:
-        run_mt(g_lock, 32, wlog)
+        while True:
+            run_mt(g_lock, 32, wlog)
     except KeyboardInterrupt:
         wlog("\nUser pressed ctrl-c...")
