@@ -17,7 +17,7 @@ def clean_input(s):
 
 def get_response(input_str):
 
-    sample = str("\n======================================== SAMPLE 1 ========================================  I'm having some trouble understanding you. Make sure you don't have any sepcial characters in your prompt.").encode('utf-8')
+    sample = str("\n======================================== SAMPLE 1 ========================================  I'm having some trouble understanding you. Make sure you don't have any special characters in your prompt.").encode('utf-8')
 
     attempts = 0
     while attempts < 5:
@@ -66,6 +66,7 @@ def clean_response(resp, inp, user=None):
     return str(pref + iop + "\n" + out + "\nBeep boop, I'm a bot.")
 
 m_guy = False
+stream_guy = False
 
 def run(lock, n_threads, log, subm):
     def message_guy(reddit, lock, log):
@@ -158,6 +159,7 @@ def run(lock, n_threads, log, subm):
 lt = time.time() - 900
 
 t_man = False
+stream_list = ['b3z92d', 'b3zlha', 'b4duec']
 
 def run_mt(lock, n_threads, log):
     def do_work(comment, lock, log, rexp):
@@ -167,11 +169,20 @@ def run_mt(lock, n_threads, log):
             lock.acquire()
             log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
             lock.release()
-            run(lock, 4, log, 'b3z92d')
-            run(lock, 4, log, 'b3zlha')
-            run(lock, 4, log, 'b4duec')
+            run(lock, 4, log, )
+            run(lock, 4, log, )
+            run(lock, 4, log, )
             time.sleep(900)
             t_man = False
+        elif not stream_guy:
+            global stream_guy
+            global stream_list
+            stream_guy = True
+            lock.acquire()
+            log("\n================ RUNNING SUBMISSION STREAM ================\n\n")
+            lock.release()
+
+
         if not isinstance(comment, praw.models.Comment):
             return
         if comment.author is None or comment.author.name == "GPT-2_Bot":
