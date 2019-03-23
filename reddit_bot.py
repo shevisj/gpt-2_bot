@@ -67,12 +67,14 @@ def clean_response(resp, inp, user=None):
 
 m_guy = False
 
-def run(lock, n_threads, log):
+def run(lock, n_threads, log, subm):
     def message_guy(reddit, lock, log):
+        log("MESSAGE GUY STARTING\n")
         global m_guy
         m_guy = True
         for message in reddit.inbox.unread(limit=None):
             if isinstance(message, praw.models.Message):
+                log("Found a DM!\n", silent=True)
                 cb = ""
                 for line in message.body.splitlines():
                     if line.strip():
@@ -82,8 +84,8 @@ def run(lock, n_threads, log):
                 cb = clean_input(cb)
 
                 if len(cb.strip()) < 2:
-                    log("Parent comment was empty")
-                    return
+                    log("Parent comment was empty", silent=True)
+                    continue
 
                 lock.acquire()
                 response = clean_response(get_response(cb), cb)
@@ -94,8 +96,6 @@ def run(lock, n_threads, log):
                 message.mark_read()
 
     def do_work(comment, lock, log, rexp, reddit):
-        if not m_guy:
-            message_guy(reddit, lock, log)
         if not isinstance(comment, praw.models.Comment):
             return
         if comment.author is None or comment.author.name == "GPT-2_Bot":
@@ -105,19 +105,19 @@ def run(lock, n_threads, log):
         for h in comment.replies:
             if h.author.name == "GPT-2_Bot":
                 return
-        log("Found one!")
+        log("Found one!", silent=True)
 
         try:
             cp = comment.parent()
 
             if isinstance(cp, praw.models.Submission):
-                log("Parent was a submission...\n")
+                log("Parent was a submission...\n", silent=True)
                 return
             else:
                 cp.refresh()
                 for h in cp.replies:
                     if h.author.name == "GPT-2_Bot":
-                        log("Already replied to this comment...\n")
+                        log("Already replied to this comment...\n", silent=True)
                         return
         except:
             return
@@ -131,7 +131,7 @@ def run(lock, n_threads, log):
         cpl = "https://www.reddit.com" + cp.permalink
 
         if len(cb.strip()) < 2:
-            log("Parent comment was empty")
+            log("Parent comment was empty", silent=True)
             return
 
         lock.acquire()
@@ -143,15 +143,16 @@ def run(lock, n_threads, log):
         return
 
     reddit = praw.Reddit('gptbot')
-    log("Starting Run... "+str(time.time()))
-    submission = praw.models.Submission(reddit, id='b3zlha')
+    log("Starting Submission Run... "+str(time.time()))
+    submission = praw.models.Submission(reddit, id=subm)
     submission.comments.replace_more(limit=None)
     rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
+    message_guy(reddit, lock, log)
     with parallel_backend('threading', n_jobs=n_threads):
         Parallel()(delayed(do_work)(comment, lock, log, rexp, reddit) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
     global m_guy
     m_guy = False
-    log("DONE!!!\n\n============================================================\n", flush=True)
+    log("SUBMISSION RUN DONE!!!\n\n============================================================\n", flush=True)
 
 
 lt = time.time() - 900
@@ -166,7 +167,9 @@ def run_mt(lock, n_threads, log):
             lock.acquire()
             log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
             lock.release()
-            run(lock, 32, log)
+            run(lock, 4, log, 'b3z92d')
+            run(lock, 4, log, 'b3zlha')
+            run(lock, 4, log, 'b4duec')
             time.sleep(900)
             t_man = False
         if not isinstance(comment, praw.models.Comment):
@@ -193,6 +196,7 @@ def run_mt(lock, n_threads, log):
                         log("Already replied to this comment...\n")
                         return
         except:
+            log("An unknown error occured.\n")
             return
 
         cb = ""
@@ -209,7 +213,10 @@ def run_mt(lock, n_threads, log):
             return
 
         lock.acquire()
-        response = clean_response(get_response(cb), cb, comment.author)
+        if comment.subreddit.name == "politics":
+            response = clean_response(get_response(cb), cb)
+        else:
+            response = clean_response(get_response(cb), cb, comment.author)
         log("Bot replying to : "+cb+"\nURL : "+cpl)
         log("Response : "+response+"\n------------------------------------------------")
         lock.release()
@@ -226,15 +233,16 @@ def run_mt(lock, n_threads, log):
     submission.comments.replace_more(limit=None)
     rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
     with parallel_backend('threading', n_jobs=n_threads):
-        Parallel()(delayed(do_work)(comment, lock, log, rexp) for comment in tqdm.tqdm(all.stream.comments(skip_existing=False, pause_after=0)) if comment is not None)
+        Parallel()(delayed(do_work)(comment, lock, log, rexp) for comment in tqdm.tqdm(all.stream.comments(skip_existing=True, pause_after=0)) if comment is not None)
 
     log("DONE!!!\n\n============================================================\n")
 
 with open("./reddit_bot_logs.txt", 'a') as log:
     w = sys.stdout.write
-    def wlog(str, flush=False):
+    def wlog(str, flush=False, silent=False):
         str += "\n"
-        w(str)
+        if not silent:
+            w(str)
         log.write(str)
         if flush:
             log.flush()
