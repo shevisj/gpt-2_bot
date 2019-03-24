@@ -272,11 +272,11 @@ def run_mt(lock, n_threads, log):
 
 with open("./reddit_bot_logs.txt", 'a') as log:
     w = sys.stdout.write
-    def wlog(str, flush=False, silent=False):
-        str += "\n"
+    def wlog(data, flush=False, silent=False):
+        data += "\n"
         if not silent:
-            w(str)
-        log.write(str)
+            w(data)
+        log.write(data)
         if flush:
             log.flush()
     print("START")
