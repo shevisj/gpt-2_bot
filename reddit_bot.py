@@ -159,29 +159,55 @@ def run(lock, n_threads, log, subm):
 lt = time.time() - 900
 
 t_man = False
-stream_list = ['b3z92d', 'b3zlha', 'b4duec']
+
+class StreamList():
+    def __init__(self):
+        self.stream_file = open("/repos/gpt-2/stream_list.txt", 'r+')
+        self.list = self._load()
+
+    def __del__(self):
+        self.stream_file.close()
+
+    def _load(self):
+        out = []
+        for line in self.stream_file:
+            out.append(line.strip())
+        return out
+
+    def append(self, data):
+        self.stream_file.write(str(data)+"\n")
+        self.stream_file.flush()
+        self.list.append(data)
+
+stream_list = StreamList()
 
 def run_mt(lock, n_threads, log):
-    def do_work(comment, lock, log, rexp):
+    def should_add_to_list(subm, lock ,log):
+        if "gpt-2" in subm.title.lower():
+            lock.acquire()
+            log("\nFound a new submission about GPT-2\nURL: "+subm.permalink)
+            stream_list.append(subm.id)
+            lock.release()
+    def do_work(comment, lock, log, rexp, reddit):
         if not t_man:
             global t_man
             t_man = True
             lock.acquire()
             log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
             lock.release()
-            run(lock, 4, log, )
-            run(lock, 4, log, )
-            run(lock, 4, log, )
+            with parallel_backend('threading', n_jobs=4):
+                Parallel()(delayed(run)(lock, 4, log, subm) for subm in tqdm.tqdm(stream_list.list))
             time.sleep(900)
             t_man = False
         elif not stream_guy:
             global stream_guy
-            global stream_list
             stream_guy = True
             lock.acquire()
             log("\n================ RUNNING SUBMISSION STREAM ================\n\n")
             lock.release()
-
+            all = reddit.subreddit('all')
+            with parallel_backend('threading', n_jobs=4):
+                Parallel()(delayed(should_add_to_list)(submission, lock, log) for submission in tqdm.tqdm(all.stream.submissions(skip_existing=True)))
 
         if not isinstance(comment, praw.models.Comment):
             return
@@ -237,14 +263,10 @@ def run_mt(lock, n_threads, log):
     reddit = praw.Reddit('gptbot')
     log("Starting Run... "+str(time.time()))
     # Get the top 5 values from our subreddit
-    srs = ["MachineLearning", "all"]
-    subs = [reddit.subreddit(sub) for sub in srs]
     all = reddit.subreddit('all')
-    submission = praw.models.Submission(reddit, id='b32lve')
-    submission.comments.replace_more(limit=None)
     rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
     with parallel_backend('threading', n_jobs=n_threads):
-        Parallel()(delayed(do_work)(comment, lock, log, rexp) for comment in tqdm.tqdm(all.stream.comments(skip_existing=True, pause_after=0)) if comment is not None)
+        Parallel()(delayed(do_work)(comment, lock, log, rexp, reddit) for comment in tqdm.tqdm(all.stream.comments(skip_existing=True)))
 
     log("DONE!!!\n\n============================================================\n")
 
