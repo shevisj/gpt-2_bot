@@ -9,8 +9,8 @@ This is a reddit bot based on OpenAi's GPT-2 117M model
 
 ### Installing Docker
 
- - [Mac](https://docs.docker.com/docker-for-mac/)
- - [Windows](https://docs.docker.com/docker-for-windows/)
+ - [Mac](https://docs.docker.com/docker-for-mac/install)
+ - [Windows](https://docs.docker.com/docker-for-windows/install)
  - [Ubuntu](https://docs.docker.com/install/linux/docker-ce/ubuntu/)
 
  Docker command-line interface reference:
