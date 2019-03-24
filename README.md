@@ -4,8 +4,7 @@ This is a reddit bot based on OpenAi's GPT-2 117M model
 ## Installation
 ### Requirements
  - Docker
- - Python3
- - Tensorflow-1.12
+ - An internet connection
  - Some pretty beefy hardware
 
 ### Installing Docker
