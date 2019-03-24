@@ -45,10 +45,6 @@ class GPT2Bot():
     def __init__(self, log):
         self.log = log
         self.lock = Lock()
-        self.enc = None
-        self.sess = None
-        self.batch_size = 1
-        self.nsamples = 1
         self.stream_guy = False
         self.t_man = False
         self.reddit = praw.Reddit('gptbot')
@@ -57,6 +53,8 @@ class GPT2Bot():
         self.stream_list = StreamList()
         self.key_word = "gpt-2"
         self.output = None
+        self.callback = None
+        self.sample = None
         
     def run_loop(self):
         while True:
@@ -66,67 +64,23 @@ class GPT2Bot():
                 self.log("\nUser pressed ctrl-c...")
                 break
 
-    def start(
-        self,
-        model_name='117M',
-        seed=None,
-        nsamples=1,
-        batch_size=1,
-        length=None,
-        temperature=1,
-        top_k=40,
-    ):
-        if batch_size is None:
-            batch_size = 1
-        assert nsamples % batch_size == 0
-        self.enc = encoder.get_encoder(model_name)
-        hparams = model.default_hparams()
-        with open(os.path.join('models', model_name, 'hparams.json')) as f:
-            hparams.override_from_dict(json.load(f))
-
-        if length is None:
-            length = hparams.n_ctx // 2
-        elif length > hparams.n_ctx:
-            raise ValueError("Can't get samples longer than window size: %s" % hparams.n_ctx)
-
-        with tf.Session(graph=tf.Graph()) as sess:
-            context = tf.placeholder(tf.int32, [batch_size, None])
-            np.random.seed(seed)
-            tf.set_random_seed(seed)
-            self.output = sample.sample_sequence(
-                hparams=hparams, length=length,
-                context=context,
-                batch_size=batch_size,
-                temperature=temperature, top_k=top_k
-            )
-
-            saver = tf.train.Saver()
-            ckpt = tf.train.latest_checkpoint(os.path.join('models', model_name))
-            saver.restore(sess, ckpt)
-            self.batch_size = batch_size
-            self.nsamples = nsamples
-            self.sess = sess
-            self.run_loop()
-
     def get_response(self, input_str):
-        self.log("\nStarting model\n")
-        if not clean_input(input_str):
-            self.log("\nReturning error\n")
-            return "Unable to read comment. Make sure there aren't any special characters."
-        context_tokens = self.enc.encode(clean_input(input_str))
-        generated = 0
-        sample = ""
-        self.log("\nStarting sample generationg\n")
-        for _ in range(self.nsamples // self.batch_size):
-            out = self.sess.run(self.output, feed_dict={
-                context: [context_tokens for _ in range(self.batch_size)]
-            })[:, len(context_tokens):]
-            for i in range(self.batch_size):
-                generated += 1
-                text = self.enc.decode(out[i])
-                sample += clean_output(text)
-        self.log("\nReturning sample\n")
-        return sample
+        sample = str("\n======================================== SAMPLE 1 ========================================  I'm having some trouble understanding you. Make sure you don't have any special characters in your prompt.").encode('utf-8')
+
+        attempts = 0
+        while attempts < 5:
+            try:
+                child = pexpect.spawn('python src/interactive_conditional_samples.py --top_k 40')
+                child.expect('Model prompt >>> ')
+                child.sendline(clean_input(input_str))
+                child.expect('================================================================================')
+                sample = child.before[len(input_str):]
+                break
+            except pexpect.exceptions.EOF:
+                child.kill(0)
+                attempts += 1
+                print("Attempt ", attempts, "failed. Trying again.")
+        return sample.decode()
 
     def clean_response(self, resp, inp, user=None):
         resp = resp.encode('utf-8')
@@ -345,4 +299,4 @@ with open("./reddit_bot_logs.txt", 'a+') as log:
         if flush:
             log.flush()
     bot = GPT2Bot(wlog)
-    fire.Fire(bot.start)
+    bot.run_loop()
