@@ -270,7 +270,7 @@ def run_mt(lock, n_threads, log):
 
     log("DONE!!!\n\n============================================================\n")
 
-with open("./reddit_bot_logs.txt", 'a') as log:
+with open("./reddit_bot_logs.txt", 'a+') as log:
     w = sys.stdout.write
     def wlog(data, flush=False, silent=False):
         data += "\n"
