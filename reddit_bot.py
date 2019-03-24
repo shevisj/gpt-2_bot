@@ -15,6 +15,7 @@ import fire
 import json
 import tensorflow as tf
 import numpy as np
+import pexpect
 
 import model, sample, encoder
 
@@ -83,7 +84,7 @@ class GPT2Bot():
         return sample.decode()
 
     def clean_response(self, resp, inp, user=None):
-        resp = resp.encode('utf-8')
+        resp = str(resp[92:]).encode('utf-8')
         resp = resp.split('<|endoftext|>'.encode('utf-8'))[0]
         sp = resp.splitlines()
         self.log("Split len", len(sp))
