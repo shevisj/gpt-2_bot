@@ -1,5 +1,7 @@
 # gpt-2_bot
-This is a reddit bot based on OpenAi's GPT-2 117M model
+This is a Reddit bot based on OpenAi's GPT-2 117M model
+
+The official implementation can be found here: [u/GPT-2_Bot](https://www.reddit.com/user/GPT-2_Bot)
 
 ## Installation
 ### Requirements
