@@ -74,7 +74,7 @@ def clean_input(s):
 def get_response(input_str):
     if not clean_input(input_str):
         return "Unable to read comment. Make sure there aren't any special characters."
-    context_tokens = enc.encode()
+    context_tokens = enc.encode(clean_input(input_str))
     generated = 0
     sample = ""
     for _ in range(g_nsamples // g_batch_size):
