@@ -117,6 +117,8 @@ def run(lock, n_threads, log, subm):
             else:
                 cp.refresh()
                 for h in cp.replies:
+                    if h.author is None:
+                        continue
                     if h.author.name == reddit.user.me().name:
                         log("Already replied to this comment...\n", silent=True)
                         return
@@ -229,6 +231,8 @@ def run_mt(lock, n_threads, log):
             else:
                 cp.refresh()
                 for h in cp.replies:
+                    if h.author is None:
+                        continue
                     if h.author.name == reddit.user.me().name:
                         log("Already replied to this comment...\n")
                         return
@@ -239,9 +243,10 @@ def run_mt(lock, n_threads, log):
         cb = ""
         for line in cp.body.splitlines():
             if line.strip():
-                insensitive_hippo = re.compile(re.escape('**INPUT(.*):**'), re.IGNORECASE)
+                insensitive_hippo = re.compile(re.escape('**OUTPUT(.*):**'), re.IGNORECASE)
+                insensitive_s = re.compile(re.escape('> '))
                 insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
-                cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', line.strip())))) + "\n"
+                cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', str(insensitive_s.sub('', line.strip())))))) + "\n"
         cb = clean_input(cb)
         cpl = "https://www.reddit.com" + cp.permalink
 
@@ -287,5 +292,5 @@ with open("./reddit_bot_logs.txt", 'a+') as log:
         except KeyboardInterrupt:
             wlog("\nUser pressed ctrl-c...")
             break
-        #except:
-        #    wlog("\nUnspecified error during run. Restarting...")
+        except:
+            wlog("\nUnspecified error during run. Restarting...")
