@@ -99,12 +99,12 @@ def run(lock, n_threads, log, subm):
     def do_work(comment, lock, log, rexp, reddit):
         if not isinstance(comment, praw.models.Comment):
             return
-        if comment.author is None or comment.author.name == reddit.user.name:
+        if comment.author is None or comment.author.name == reddit.user.me().name:
             return
         if rexp.match(clean_input(comment.body)) is None:
             return
         for h in comment.replies:
-            if h.author.name == reddit.user.name:
+            if h.author.name == reddit.user.me().name:
                 return
         log("Found one!", silent=True)
 
@@ -117,7 +117,7 @@ def run(lock, n_threads, log, subm):
             else:
                 cp.refresh()
                 for h in cp.replies:
-                    if h.author.name == reddit.user.name:
+                    if h.author.name == reddit.user.me().name:
                         log("Already replied to this comment...\n", silent=True)
                         return
         except:
@@ -211,12 +211,12 @@ def run_mt(lock, n_threads, log):
 
         if not isinstance(comment, praw.models.Comment):
             return
-        if comment.author is None or comment.author.name == reddit.user.name:
+        if comment.author is None or comment.author.name == reddit.user.me().name:
             return
         if rexp.match(clean_input(comment.body)) is None:
             return
         for h in comment.replies:
-            if h.author.name == reddit.user.name:
+            if h.author.name == reddit.user.me().name:
                 return
         log("Found one!")
 
@@ -229,7 +229,7 @@ def run_mt(lock, n_threads, log):
             else:
                 cp.refresh()
                 for h in cp.replies:
-                    if h.author.name == reddit.user.name:
+                    if h.author.name == reddit.user.me().name:
                         log("Already replied to this comment...\n")
                         return
         except:
@@ -287,5 +287,5 @@ with open("./reddit_bot_logs.txt", 'a+') as log:
         except KeyboardInterrupt:
             wlog("\nUser pressed ctrl-c...")
             break
-        except:
-            wlog("\nUnspecified error during run. Restarting...")
+        #except:
+        #    wlog("\nUnspecified error during run. Restarting...")
