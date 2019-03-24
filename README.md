@@ -91,7 +91,7 @@ This page describes how to change praw.ini files: https://praw.readthedocs.io/en
 
 _I don’t recommend modifying the package-level praw.ini as those changes will be overwritten every time the package is updated. Instead praw.ini should be placed in the directory that the program is run from (often the same directory as the file)._
 
-In your praw.ini file, make sure the profile tag is set to `gptbot` and make sure the file is located in the base of the `gpt-2` repository.
+In your praw.ini file, make sure the profile tag is set to `[gptbot]` and make sure the file is located in the base of the `gpt-2` repository.
 
 ## Running the bot
 Once setup is complete, actually running the bot is very simple. From the base of the `gpt-2` repository:
