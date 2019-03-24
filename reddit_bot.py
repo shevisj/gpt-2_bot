@@ -50,7 +50,6 @@ class GPT2Bot():
         self.batch_size = 1
         self.nsamples = 1
         self.stream_guy = False
-        self.lt = time.time() - 900
         self.t_man = False
         self.reddit = praw.Reddit('gptbot')
         self.rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
