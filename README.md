@@ -78,8 +78,10 @@ Give it a name. You have to choose a redirect uri (for some stupid reason, stupi
 
 You will now get a client_id (red box below) and secret (blue box below). Note it down, but keep it secret.
 
-<img src="https://www.pythonforengineers.com/wp-content/uploads/2014/11/redditbot2.jpg" alt="" width="1444" height="644">
+![](https://www.pythonforengineers.com/wp-content/uploads/2014/11/redditbot2.jpg | width=100)
+
 [credit](https://www.pythonforengineers.com/build-a-reddit-bot-part-1/)
+
 
 Now, you need to update your praw ini file to remember these settings. Otherwise, you’ll have to put them in your script and thats dangerous (as others might see them).
 
