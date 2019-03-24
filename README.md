@@ -66,7 +66,7 @@ cp ./reddit_bot.py ../gpt-2/reddit_bot.py
 ```
 
 ### Configuring Praw (Reddit python interface)
-Praw is a library that fixes many of these problems for you. It limits how many requests you can make, and makes it easy to extract the json.
+Praw is a library that interfaces with the Reddit API for you. It limits how many requests you can make, and makes it easy to extract the json responses.
 
 You need to do a bit of setup first though in order for the bot to be able to post to Reddit.
 
