@@ -12,7 +12,6 @@ from threading import Lock
 import tqdm
 import fire
 import json
-import os
 import tensorflow as tf
 import numpy as np
 
