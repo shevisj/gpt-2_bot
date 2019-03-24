@@ -56,6 +56,7 @@ class GPT2Bot():
         self.name = self.reddit.user.me().name
         self.stream_list = StreamList()
         self.key_word = "gpt-2"
+        self.output = None
         
     def run_loop(self):
         while True:
@@ -92,7 +93,7 @@ class GPT2Bot():
             context = tf.placeholder(tf.int32, [batch_size, None])
             np.random.seed(seed)
             tf.set_random_seed(seed)
-            output = sample.sample_sequence(
+            self.output = sample.sample_sequence(
                 hparams=hparams, length=length,
                 context=context,
                 batch_size=batch_size,
@@ -117,7 +118,7 @@ class GPT2Bot():
         sample = ""
         self.log("\nStarting sample generationg\n")
         for _ in range(self.nsamples // self.batch_size):
-            out = self.sess.run(output, feed_dict={
+            out = self.sess.run(self.output, feed_dict={
                 context: [context_tokens for _ in range(self.batch_size)]
             })[:, len(context_tokens):]
             for i in range(self.batch_size):
