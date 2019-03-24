@@ -78,7 +78,7 @@ Give it a name. You have to choose a redirect uri (for some stupid reason, stupi
 
 You will now get a client_id (red box below) and secret (blue box below). Note it down, but keep it secret.
 
-![](https://www.pythonforengineers.com/wp-content/uploads/2014/11/redditbot2.jpg | width=100)
+<img src="https://www.pythonforengineers.com/wp-content/uploads/2014/11/redditbot2.jpg" alt="" width="600" height="300">
 
 [credit](https://www.pythonforengineers.com/build-a-reddit-bot-part-1/)
 
