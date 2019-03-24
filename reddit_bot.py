@@ -5,37 +5,91 @@ import re
 import random
 import os
 import pbd
-import pexpect
 import string
 import time
 from joblib import Parallel, delayed, parallel_backend
 from threading import Lock
 import tqdm
+import fire
+import json
+import os
+import tensorflow as tf
+import numpy as np
+
+import model, sample, encoder
+
+enc = None
+g_sess = None
+g_batch_size = 1
+g_nsamples = 1
+g_callback = print
+
+def get_model(
+    model_name='117M',
+    seed=None,
+    nsamples=1,
+    batch_size=1,
+    length=None,
+    temperature=1,
+    top_k=40,
+):
+    if batch_size is None:
+        batch_size = 1
+    assert nsamples % batch_size == 0
+    global enc
+    global g_sess
+    global g_batch_size
+    global g_nsamples
+    enc = encoder.get_encoder(model_name)
+    hparams = model.default_hparams()
+    with open(os.path.join('models', model_name, 'hparams.json')) as f:
+        hparams.override_from_dict(json.load(f))
+
+    if length is None:
+        length = hparams.n_ctx // 2
+    elif length > hparams.n_ctx:
+        raise ValueError("Can't get samples longer than window size: %s" % hparams.n_ctx)
+
+    with tf.Session(graph=tf.Graph()) as sess:
+        context = tf.placeholder(tf.int32, [batch_size, None])
+        np.random.seed(seed)
+        tf.set_random_seed(seed)
+        output = sample.sample_sequence(
+            hparams=hparams, length=length,
+            context=context,
+            batch_size=batch_size,
+            temperature=temperature, top_k=top_k
+        )
+
+        saver = tf.train.Saver()
+        ckpt = tf.train.latest_checkpoint(os.path.join('models', model_name))
+        saver.restore(sess, ckpt)
+        g_batch_size = batch_size
+        g_nsamples = nsamples
+        g_sess = sess
+        g_callback()
 
 def clean_input(s):
     return ''.join(filter(lambda x: x in set(string.printable), s))
 
 def get_response(input_str):
-
-    sample = str("\n======================================== SAMPLE 1 ========================================  I'm having some trouble understanding you. Make sure you don't have any special characters in your prompt.").encode('utf-8')
-
-    attempts = 0
-    while attempts < 5:
-        try:
-            child = pexpect.spawn('python src/interactive_conditional_samples.py --top_k 40')
-            child.expect('Model prompt >>> ')
-            child.sendline(clean_input(input_str))
-            child.expect('================================================================================')
-            sample = child.before[len(input_str):]
-            break
-        except pexpect.exceptions.EOF:
-            child.kill(0)
-            attempts += 1
-            print("Attempt ", attempts, "failed. Trying again.")
-    return sample.decode()
+    if not clean_input(input_str):
+        return "Unable to read comment. Make sure there aren't any special characters."
+    context_tokens = enc.encode()
+    generated = 0
+    sample = ""
+    for _ in range(g_nsamples // g_batch_size):
+        out = g_sess.run(output, feed_dict={
+            context: [context_tokens for _ in range(g_batch_size)]
+        })[:, len(context_tokens):]
+        for i in range(g_batch_size):
+            generated += 1
+            text = enc.decode(out[i])
+            sample += clean_output(text)
+    return sample
 
 def clean_response(resp, inp, user=None):
-    resp = str(resp[92:]).encode('utf-8')
+    resp = resp.encode('utf-8')
     resp = resp.split('<|endoftext|>'.encode('utf-8'))[0]
     sp = resp.splitlines()
     print("Split len", len(sp))
@@ -164,7 +218,7 @@ t_man = False
 
 class StreamList():
     def __init__(self):
-        self.stream_file = open("/repos/gpt-2/stream_list.txt", 'r+')
+        self.stream_file = open("./src/stream_list.txt", 'r+')
         self.list = self._load()
 
     def __del__(self):
@@ -286,11 +340,14 @@ with open("./reddit_bot_logs.txt", 'a+') as log:
             log.flush()
     print("START")
     g_lock = Lock()
-    while True:
-        try:
-            run_mt(g_lock, 32, wlog)
-        except KeyboardInterrupt:
-            wlog("\nUser pressed ctrl-c...")
-            break
-        except:
-            wlog("\nUnspecified error during run. Restarting...")
+    def start():
+        while True:
+            try:
+                run_mt(g_lock, 32, wlog)
+            except KeyboardInterrupt:
+                wlog("\nUser pressed ctrl-c...")
+                break
+            #except:
+            #    wlog("\nUnspecified error during run. Restarting...")
+    g_callback = start
+    fire.Fire(get_model)
