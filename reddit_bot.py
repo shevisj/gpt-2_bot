@@ -136,8 +136,12 @@ class GPT2Bot():
                 self.log("Bot replying to direct message: "+cb)
                 self.log("Response : "+response+"\n------------------------------------------------")
                 self.lock.release()
-                message.reply(response)
-                message.mark_read()
+                try:
+                    message.reply(response)
+                    message.mark_read()
+                except:
+                    self.log("An error occured while replying")
+                
 
     def run(self, n_threads, subm):
         def do_work(self, comment):
@@ -186,7 +190,10 @@ class GPT2Bot():
             self.log("Bot replying to : "+cb+"\nURL : "+cpl)
             self.log("Response : "+response+"\n------------------------------------------------")
             self.lock.release()
-            cp.reply(response)
+            try:
+                cp.reply(response)
+            except:
+                self.log("An error occured while replying")
             return
 
         self.log("Starting Submission Run... "+str(time.time()))
@@ -215,7 +222,7 @@ class GPT2Bot():
                 self.log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
                 self.lock.release()
                 with parallel_backend('threading', n_jobs=4):
-                    Parallel()(delayed(self.run)(4, subm) for subm in tqdm.tqdm(self.stream_list.list))
+                    Parallel()(delayed(self.run)(16, subm) for subm in tqdm.tqdm(self.stream_list.list))
                 self.message_guy()
                 time.sleep(900)
                 self.t_man = False
@@ -279,7 +286,10 @@ class GPT2Bot():
             self.log("Bot replying to : "+cb+"\nURL : "+cpl)
             self.log("Response : "+response+"\n------------------------------------------------")
             self.lock.release()
-            cp.reply(response)
+            try:
+                cp.reply(response)
+            except:
+                self.log("An error occured while replying")
             return
 
         self.log("Starting Run... "+str(time.time()))
