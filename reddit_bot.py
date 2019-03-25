@@ -16,6 +16,8 @@ import json
 import tensorflow as tf
 import numpy as np
 import pexpect
+import itertools
+import collections
 
 import model, sample, encoder
 
@@ -48,14 +50,41 @@ class GPT2Bot():
         self.lock = Lock()
         self.stream_guy = False
         self.t_man = False
-        self.reddit = praw.Reddit('gptbot')
+        self.reddit_1 = praw.Reddit('gptbot')
+        self.reddit_2 = praw.Reddit('gptbot2')
+        self.toggle = True
         self.rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
-        self.name = self.reddit.user.me().name
+        self.name = self.reddit_1.user.me().name
         self.stream_list = StreamList()
         self.key_word = "gpt-2"
         self.output = None
         self.callback = None
         self.sample = None
+        self.id_history = collections.OrderedDict()
+        self.check_hist = True
+        self.history_lock = Lock()
+        
+    def filter_id(self, id):
+        if id in self.id_history:
+            return True
+        else:
+            self.history_lock.acquire()
+            self.id_history[id] = True
+            self.history_lock.release()
+            if self.check_hist and len(self.id_history) > 1000:
+                self.check_hist = False
+                self.history_lock.acquire()
+                reversed_s = collections.OrderedDict.fromkeys(reversed(self.id_history), True)
+                reversed_t = collections.OrderedDict(itertools.islice(reversed_s.items(), 500))
+                self.id_history = collections.OrderedDict.fromkeys(reversed(reversed_t), True)
+                self.history_lock.release()
+                time.sleep(10)
+                self.check_hist = True
+            return False
+            
+    def reddit(self):
+        self.toggle = not self.toggle
+        return self.reddit_1 if self.toggle else self.reddit_2
         
     def run_loop(self):
         while True:
@@ -90,7 +119,7 @@ class GPT2Bot():
         self.log("Split len", len(sp))
         out = ""
 
-        ctr = 0
+        ctr = 1
         lp = len(sp)
         stop = False
         pref = "**OUTPUT"
@@ -116,7 +145,7 @@ class GPT2Bot():
 
     def message_guy(self):
         self.log("MESSAGE GUY STARTING\n")
-        for message in self.reddit.inbox.unread(limit=None):
+        for message in self.reddit().inbox.unread(limit=None):
             if isinstance(message, praw.models.Message):
                 self.log("Found a DM!\n", silent=True)
                 cb = ""
@@ -137,7 +166,7 @@ class GPT2Bot():
                 self.log("Response : "+response+"\n------------------------------------------------")
                 self.lock.release()
                 try:
-                    if not response:
+                    if not response.strip():
                         self.log("Response was empty")
                         continue
                     message.reply(response)
@@ -205,7 +234,7 @@ class GPT2Bot():
             return
 
         self.log("Starting Submission Run... "+str(time.time()))
-        submission = praw.models.Submission(self.reddit, id=subm)
+        submission = praw.models.Submission(self.reddit(), id=subm)
         submission.comments.replace_more(limit=None)
         with parallel_backend('threading', n_jobs=n_threads):
             Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
@@ -228,20 +257,21 @@ class GPT2Bot():
                 with parallel_backend('threading', n_jobs=4):
                     Parallel()(delayed(self.run)(16, subm) for subm in tqdm.tqdm(self.stream_list.list))
                 self.message_guy()
-                time.sleep(900)
+                time.sleep(14400)
                 self.t_man = False
             elif not self.stream_guy:
                 self.stream_guy = True
                 self.lock.acquire()
                 self.log("\n================ RUNNING SUBMISSION STREAM ================\n\n")
                 self.lock.release()
-                all = self.reddit.subreddit('all')
+                all = self.reddit().subreddit('all')
                 with parallel_backend('threading', n_jobs=4):
                     Parallel()(delayed(self.should_add_to_list)(submission) for submission in tqdm.tqdm(all.stream.submissions(skip_existing=True)))
-
             if not isinstance(comment, praw.models.Comment):
                 return
             if comment.author is None or comment.author.name == self.name:
+                return
+            if self.filter_id(comment.id):
                 return
             if self.rexp.match(clean_input(comment.body)) is None:
                 return
@@ -257,14 +287,15 @@ class GPT2Bot():
                     self.log("Parent was a submission...\n")
                     return
                 else:
+                    cp.refresh()
                     for h in cp.replies:
                         if h.author is None:
                             continue
                         if h.author.name == self.name:
                             self.log("Already replied to this comment...\n")
                             return
-            except:
-                self.log("An unknown error occured.\n")
+            except Exception as e:
+                self.log("An unknown error occured.\n" + str(e))
                 return
 
             cb = ""
@@ -303,11 +334,16 @@ class GPT2Bot():
 
         self.log("Starting Run... "+str(time.time()))
         # Get the top 5 values from our subreddit
-        all = self.reddit.subreddit('all')
-        with parallel_backend('threading', n_jobs=n_threads):
-            Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(all.stream.comments(skip_existing=True)))
+        subrs = ['funny', 'AskReddit', 'gaming', 'pics', 'science', 'worldnews', 'todayilearned', 'movies', 'videos', 'ShowerThoughts', 'MachineLearning', 'test', 'all', 'youtubehaiku', 'thanosdidnothingwrong', 'dankmemes']
+        all_arr = [self.reddit().subreddit(subr) for subr in subrs]
+        def deploy_stream(self, subr):
+            with parallel_backend('threading', n_jobs=n_threads):
+                Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(subr.stream.comments(skip_existing=True)))
+            
+        with parallel_backend('threading', n_jobs=16):
+            Parallel()(delayed(deploy_stream)(self, subr) for subr in all_arr)
 
-        self.log("DONE!!!\n\n============================================================\n")
+        self.log("\nMAIN THREAD DONE!!!\n\n============================================================\n")
 
 with open("./reddit_bot_logs.txt", 'a+') as log:
     w = sys.stdout.write
