@@ -132,11 +132,14 @@ class GPT2Bot():
                     continue
 
                 self.lock.acquire()
-                response = clean_response(self.get_response(cb), cb)
+                response = self.clean_response(self.get_response(cb), cb)
                 self.log("Bot replying to direct message: "+cb)
                 self.log("Response : "+response+"\n------------------------------------------------")
                 self.lock.release()
                 try:
+                    if not response:
+                        self.log("Response was empty")
+                        continue
                     message.reply(response)
                     message.mark_read()
                 except:
@@ -161,7 +164,6 @@ class GPT2Bot():
                     self.log("Parent was a submission...\n", silent=True)
                     return
                 else:
-                    cp.refresh()
                     for h in cp.replies:
                         if h.author is None:
                             continue
@@ -184,6 +186,9 @@ class GPT2Bot():
             if len(cb.strip()) < 2:
                 self.log("Parent comment was empty")
                 return
+            elif cb.strip() == "[removed]":
+                self.log("Parent comment was removed")
+                return
 
             self.lock.acquire()
             response = self.clean_response(self.get_response(cb), cb, comment.author)
@@ -191,20 +196,19 @@ class GPT2Bot():
             self.log("Response : "+response+"\n------------------------------------------------")
             self.lock.release()
             try:
+                if not response:
+                    self.log("Response was empty")
+                    return
                 cp.reply(response)
             except:
                 self.log("An error occured while replying")
             return
 
         self.log("Starting Submission Run... "+str(time.time()))
-        if subm == "b3zlha":
-            self.log("\n\nSTARTING THE RUN YOU AJODSLLKAJDF\n")
         submission = praw.models.Submission(self.reddit, id=subm)
         submission.comments.replace_more(limit=None)
         with parallel_backend('threading', n_jobs=n_threads):
             Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
-        if subm == "b3zlha":
-            self.log("\n\FINISHED THE RUN YOU AJODSLLKAJDF\n")
         self.log("SUBMISSION RUN DONE!!!\n\n============================================================\n", flush=True)
 
     def should_add_to_list(self, subm):
@@ -253,7 +257,6 @@ class GPT2Bot():
                     self.log("Parent was a submission...\n")
                     return
                 else:
-                    cp.refresh()
                     for h in cp.replies:
                         if h.author is None:
                             continue
@@ -277,6 +280,9 @@ class GPT2Bot():
             if len(cb.strip()) < 1:
                 self.log("Parent comment was empty")
                 return
+            elif cb.strip() == "[removed]":
+                self.log("Parent comment was removed")
+                return
 
             self.lock.acquire()
             if comment.subreddit.name == "politics":
@@ -287,6 +293,9 @@ class GPT2Bot():
             self.log("Response : "+response+"\n------------------------------------------------")
             self.lock.release()
             try:
+                if not response:
+                    self.log("Response was empty")
+                    return
                 cp.reply(response)
             except:
                 self.log("An error occured while replying")
