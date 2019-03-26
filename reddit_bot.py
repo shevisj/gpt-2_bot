@@ -9,7 +9,7 @@ import string
 import time
 import functools
 from joblib import Parallel, delayed, parallel_backend
-from threading import Lock
+from threading import Lock, Condition
 import tqdm
 import fire
 import json
@@ -23,6 +23,56 @@ import model, sample, encoder
 
 def clean_input(s):
     return ''.join(filter(lambda x: x in set(string.printable), s))
+
+class AugSelector(object):
+    def __init__(self):
+        self.keys = []
+        self.len_k = 0
+        
+    def register(self, acs):
+        self.keys.append(acs)
+        self.len_k += 1
+
+    def __next__(self):
+        while True:
+            for ctr in range(self.len_k):
+                cur = self.keys[ctr].read()
+                if cur is None:
+                    continue
+                else:
+                    yield cur
+    def __iter__(self):
+        return self
+                
+class AugComStream(object):
+    def __init__(self, sr, fn, skip_existing=True):
+        self.subreddit = sr
+        self.fileno_i = fn
+        self.skip_existing = skip_existing
+    
+    def __next__(self):
+        for c in self.subreddit.stream.comments(skip_existing=self.skip_existing, pause_after=0):
+            yield c
+    
+    def fileno(self):
+        return self.fileno_i
+    
+    def readline(self):
+        for c in self.subreddit.stream.comments(skip_existing=self.skip_existing):
+            yield c
+            
+    def read(self, data=None):
+        for c in self.subreddit.stream.comments(skip_existing=self.skip_existing):
+            yield c
+            
+    def write(self, data):
+        pass
+        
+    def seek(self, idx):
+        pass
+        
+    def close(self):
+        pass
 
 class StreamList():
     def __init__(self):
@@ -63,7 +113,9 @@ class GPT2Bot():
         self.id_history = collections.OrderedDict()
         self.check_hist = True
         self.history_lock = Lock()
-        
+        self.sel = AugSelector()
+
+    
     def filter_id(self, id):
         if id in self.id_history:
             return True
@@ -165,6 +217,7 @@ class GPT2Bot():
                 self.log("Bot replying to direct message: "+cb)
                 self.log("Response : "+response+"\n------------------------------------------------")
                 self.lock.release()
+
                 try:
                     if not response.strip():
                         self.log("Response was empty")
@@ -224,6 +277,7 @@ class GPT2Bot():
             self.log("Bot replying to : "+cb+"\nURL : "+cpl)
             self.log("Response : "+response+"\n------------------------------------------------")
             self.lock.release()
+            
             try:
                 if not response:
                     self.log("Response was empty")
@@ -247,102 +301,113 @@ class GPT2Bot():
             self.stream_list.append(subm.id)
             self.lock.release()
 
-    def run_mt(self, n_threads):
-        def do_work(self, comment):
-            if not self.t_man:
-                self.t_man = True
-                self.lock.acquire()
-                self.log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
-                self.lock.release()
-                with parallel_backend('threading', n_jobs=4):
-                    Parallel()(delayed(self.run)(16, subm) for subm in tqdm.tqdm(self.stream_list.list))
-                self.message_guy()
-                time.sleep(14400)
-                self.t_man = False
-            elif not self.stream_guy:
-                self.stream_guy = True
-                self.lock.acquire()
-                self.log("\n================ RUNNING SUBMISSION STREAM ================\n\n")
-                self.lock.release()
-                all = self.reddit().subreddit('all')
-                with parallel_backend('threading', n_jobs=4):
-                    Parallel()(delayed(self.should_add_to_list)(submission) for submission in tqdm.tqdm(all.stream.submissions(skip_existing=True)))
-            if not isinstance(comment, praw.models.Comment):
-                return
-            if comment.author is None or comment.author.name == self.name:
-                return
-            if self.filter_id(comment.id):
-                return
-            if self.rexp.match(clean_input(comment.body)) is None:
-                return
-            for h in comment.replies:
-                if h.author.name == self.name:
-                    return
-            self.log("Found one!")
 
-            try:
-                cp = comment.parent()
-
-                if isinstance(cp, praw.models.Submission):
-                    self.log("Parent was a submission...\n")
-                    return
-                else:
-                    cp.refresh()
-                    for h in cp.replies:
-                        if h.author is None:
-                            continue
-                        if h.author.name == self.name:
-                            self.log("Already replied to this comment...\n")
-                            return
-            except Exception as e:
-                self.log("An unknown error occured.\n" + str(e))
+    def do_work(self, comment):
+        if not self.t_man:
+            self.t_man = True
+            self.log("\n================ RUNNING SUBMISSION SWEEP ================\n\n")
+            with parallel_backend('threading', n_jobs=4):
+                Parallel()(delayed(self.run)(16, subm) for subm in tqdm.tqdm(self.stream_list.list))
+            self.message_guy()
+            time.sleep(14400)
+            self.t_man = False
+        elif not self.stream_guy:
+            self.stream_guy = True
+            self.log("\n================ RUNNING SUBMISSION STREAM ================\n\n")
+            all = self.reddit().subreddit('all')
+            with parallel_backend('threading', n_jobs=4):
+                Parallel()(delayed(self.should_add_to_list)(submission) for submission in tqdm.tqdm(all.stream.submissions(skip_existing=True)))
+        if not isinstance(comment, praw.models.Comment):
+            return
+        if comment.author is None or comment.author.name == self.name:
+            return
+        if self.filter_id(comment.id):
+            return
+        if self.rexp.match(clean_input(comment.body)) is None:
+            return
+        for h in comment.replies:
+            if h.author.name == self.name:
                 return
+        self.log("Found one!")
 
-            cb = ""
-            for line in cp.body.splitlines():
-                if line.strip():
-                    insensitive_hippo = re.compile(re.escape('**OUTPUT(.*):**'), re.IGNORECASE)
-                    insensitive_s = re.compile(re.escape('> '))
-                    insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
-                    cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', str(insensitive_s.sub('', line.strip())))))) + "\n"
-            cb = clean_input(cb)
-            cpl = "https://www.reddit.com" + cp.permalink
+        try:
+            cp = comment.parent()
 
-            if len(cb.strip()) < 1:
-                self.log("Parent comment was empty")
+            if isinstance(cp, praw.models.Submission):
+                self.log("Parent was a submission...\n")
                 return
-            elif cb.strip() == "[removed]":
-                self.log("Parent comment was removed")
-                return
-
-            self.lock.acquire()
-            if comment.subreddit.name == "politics":
-                response = self.clean_response(self.get_response(cb), cb)
             else:
-                response = self.clean_response(self.get_response(cb), cb, comment.author)
-            self.log("Bot replying to : "+cb+"\nURL : "+cpl)
-            self.log("Response : "+response+"\n------------------------------------------------")
-            self.lock.release()
-            try:
-                if not response:
-                    self.log("Response was empty")
-                    return
-                cp.reply(response)
-            except:
-                self.log("An error occured while replying")
+                cp.refresh()
+                for h in cp.replies:
+                    if h.author is None:
+                        continue
+                    if h.author.name == self.name:
+                        self.log("Already replied to this comment...\n")
+                        return
+        except Exception as e:
+            self.log("An unknown error occured.\n" + str(e))
             return
 
+        cb = ""
+        for line in cp.body.splitlines():
+            if line.strip():
+                insensitive_hippo = re.compile(re.escape('**OUTPUT(.*):**'), re.IGNORECASE)
+                insensitive_s = re.compile(re.escape('> '))
+                insensitive_d = re.compile(re.escape("Beep boop, I'm a bot."), re.IGNORECASE)
+                cb += str(insensitive_hippo.sub('', str(insensitive_d.sub('', str(insensitive_s.sub('', line.strip())))))) + "\n"
+        cb = clean_input(cb)
+        cpl = "https://www.reddit.com" + cp.permalink
+
+        if len(cb.strip()) < 1:
+            self.log("Parent comment was empty")
+            return
+        elif cb.strip() == "[removed]":
+            self.log("Parent comment was removed")
+            return
+        
+        self.lock.acquire()
+        response = self.clean_response(self.get_response(cb), cb, comment.author)
+        self.log("Bot replying to : "+cb+"\nURL : "+cpl)
+        self.log("Response : "+response+"\n------------------------------------------------")
+        self.lock.release()
+        try:
+            if not response:
+                self.log("Response was empty")
+                return
+            cp.reply(response)
+        except:
+            self.log("An error occured while replying")
+        return
+
+    
+    def run_mt(self, n_threads):
         self.log("Starting Run... "+str(time.time()))
         # Get the top 5 values from our subreddit
-        subrs = ['funny', 'AskReddit', 'gaming', 'pics', 'science', 'worldnews', 'todayilearned', 'movies', 'videos', 'ShowerThoughts', 'MachineLearning', 'test', 'all', 'youtubehaiku', 'thanosdidnothingwrong', 'dankmemes']
+        subrs = []
+        with open('/mnt/sub_list.txt', 'r') as sf:
+            for line in sf:
+                if line.strip(): subrs.append(line.strip())
         all_arr = [self.reddit().subreddit(subr) for subr in subrs]
-        def deploy_stream(self, subr):
-            with parallel_backend('threading', n_jobs=n_threads):
-                Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(subr.stream.comments(skip_existing=True)))
-            
-        with parallel_backend('threading', n_jobs=16):
-            Parallel()(delayed(deploy_stream)(self, subr) for subr in all_arr)
+        # n_threads = len(subrs)
+        # def deploy_stream(self, subr):
+        #     with parallel_backend('threading', n_jobs=1):
+        #         Parallel()(delayed(do_work)(self, comment) for comment in subr.stream.comments(skip_existing=True))
+        #
+        # self.log("\nDeploying "+str(n_threads)+" threads")
+        # with parallel_backend('threading', n_jobs=n_threads):
+        #     Parallel()(delayed(deploy_stream)(self, subr) for subr in tqdm.tqdm(all_arr))
+         
+        
+        ctr = 0
+        for subr in all_arr:
+            self.sel.register(AugComStream(subr, ctr, skip_existing=True))
+            ctr += 1
 
+        self.log("\nDeploying "+str(n_threads)+" threads")
+        
+        with parallel_backend('threading', n_jobs=n_threads):
+            Parallel()(delayed(self.do_work)(comment) for comment in tqdm.tqdm(self.sel))
+            
         self.log("\nMAIN THREAD DONE!!!\n\n============================================================\n")
 
 with open("./reddit_bot_logs.txt", 'a+') as log:
