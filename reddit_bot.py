@@ -403,10 +403,16 @@ class GPT2Bot():
             self.sel.register(AugComStream(subr, ctr, skip_existing=True))
             ctr += 1
 
-        self.log("\nDeploying "+str(n_threads)+" threads")
         
+        all_arr = [self.reddit().subreddit(subr) for subr in subrs]
+        n_threads = len(all_arr)
+        self.log("\nDeploying "+str(n_threads)+" threads")
+        def deploy_stream(self, subr):
+            with parallel_backend('threading', n_jobs=32):
+                Parallel()(delayed(self.do_work)(comment) for comment in subr.stream.comments(skip_existing=True))
+
         with parallel_backend('threading', n_jobs=n_threads):
-            Parallel()(delayed(self.do_work)(comment) for comment in tqdm.tqdm(self.sel))
+            Parallel()(delayed(deploy_stream)(self, subr) for subr in tqdm.tqdm(all_arr))
             
         self.log("\nMAIN THREAD DONE!!!\n\n============================================================\n")
 
