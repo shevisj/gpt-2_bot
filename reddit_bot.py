@@ -193,6 +193,8 @@ class GPT2Bot():
             ctr += 1
             if len(out) > len(inp):
                 break
+        if len(out) < 4:
+            return ""
         return str(pref + iop + "\n" + out + "\nBeep boop, I'm a bot.")
 
     def message_guy(self):
@@ -364,16 +366,18 @@ class GPT2Bot():
         elif cb.strip() == "[removed]":
             self.log("Parent comment was removed")
             return
-        
-        self.lock.acquire()
-        response = self.clean_response(self.get_response(cb), cb, comment.author)
-        self.log("Bot replying to : "+cb+"\nURL : "+cpl)
-        self.log("Response : "+response+"\n------------------------------------------------")
-        self.lock.release()
+        response = ""
         try:
-            if not response:
-                self.log("Response was empty")
-                return
+            cntr = 0
+            while not response:
+                if cntr >= 5:
+                    raise Exception()
+                self.lock.acquire()
+                response = self.clean_response(self.get_response(cb), cb, comment.author)
+                self.log("Bot replying to : "+cb+"\nURL : "+cpl)
+                self.log("Response : "+response+"\n------------------------------------------------")
+                self.lock.release()
+                cntr += 1
             cp.reply(response)
         except:
             self.log("An error occured while replying")
