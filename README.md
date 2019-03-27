@@ -28,7 +28,7 @@ Perform all remaining steps from within this docker container.
 To run this bot, you must first clone the original GPT-2 repository.
 
 ```
-git clone https://github.com/openai/gpt-2.git
+git clone https://github.com/shevisjohnson/gpt-2.git
 cd gpt-2
 ```
 
