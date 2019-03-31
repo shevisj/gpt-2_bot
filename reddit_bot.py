@@ -148,6 +148,9 @@ class GPT2Bot():
             except KeyboardInterrupt:
                 self.log("\nUser pressed ctrl-c...")
                 break
+            except:
+                self.log("Error during runtime. Sleeping for 60 then retrying.")
+                time.sleep(60)
 
     def get_response(self, input_str):
         sample = str("\n======================================== SAMPLE 1 ========================================  I'm having some trouble understanding you. Make sure you don't have any special characters in your prompt.").encode('utf-8')
