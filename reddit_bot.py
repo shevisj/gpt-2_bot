@@ -100,10 +100,10 @@ class GPT2Bot():
         self.lock = Lock()
         self.stream_guy = False
         self.t_man = False
-        self.reddit_1 = praw.Reddit('shevis')
-        # try:
-        #     self.reddit_2 = praw.Reddit('gptbot2')
-        # except:
+        self.reddit_1 = praw.Reddit('gptbot')
+        try:
+            self.reddit_2 = praw.Reddit('gptbot2')
+        except:
         self.reddit_2 = self.reddit_1
         self.toggle = True
         self.rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
