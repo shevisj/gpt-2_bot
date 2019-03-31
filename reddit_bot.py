@@ -76,7 +76,7 @@ class AugComStream(object):
 
 class StreamList():
     def __init__(self):
-        self.stream_file = open("/mnt/stream_list.txt", 'r+')
+        self.stream_file = open("./src/stream_list.txt", 'r+')
         self.list = self._load()
 
     def __del__(self):
@@ -100,11 +100,11 @@ class GPT2Bot():
         self.lock = Lock()
         self.stream_guy = False
         self.t_man = False
-        self.reddit_1 = praw.Reddit('gptbot')
-        try:
-            self.reddit_2 = praw.Reddit('gptbot2')
-        except:
-            self.reddit_2 = self.reddit_1
+        self.reddit_1 = praw.Reddit('shevis')
+        # try:
+        #     self.reddit_2 = praw.Reddit('gptbot2')
+        # except:
+        self.reddit_2 = self.reddit_1
         self.toggle = True
         self.rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
         self.name = self.reddit_1.user.me().name
@@ -118,6 +118,28 @@ class GPT2Bot():
         self.history_lock = Lock()
         self.sel = AugSelector()
 
+    
+    def download_comment_data(self):
+        comments = []
+        for comment in tqdm.tqdm(self.reddit().redditor('GPT-2_Bot').comments.new(limit=None)):
+            data = {
+                'body': comment.body,
+                'created_utc': comment.created_utc,
+                'distinguished': comment.distinguished,
+                'edited': comment.edited,
+                'id': comment.id,
+                'is_submitter': comment.is_submitter,
+                'link_id': comment.link_id,
+                'parent_id': comment.parent_id,
+                'permalink': comment.permalink,
+                'score': comment.score,
+                'stickied': comment.stickied,
+                'subreddit_id': comment.subreddit_id
+            }
+            comments.append(data)
+        with open("/mnt/bot_data.txt", 'w') as df:
+            json.dump(comments, df)
+            
     
     def filter_id(self, id):
         if id in self.id_history:
@@ -142,6 +164,7 @@ class GPT2Bot():
         return self.reddit_1 if self.toggle else self.reddit_2
         
     def run_loop(self):
+        #self.download_comment_data()
         while True:
             try:
                 self.run_mt(32)
@@ -251,14 +274,14 @@ class GPT2Bot():
                 cp = comment.parent()
 
                 if isinstance(cp, praw.models.Submission):
-                    self.log("Parent was a submission...\n", silent=True)
+                    self.log("Parent was a submission...\n", silent=False)
                     return
                 else:
                     for h in cp.replies:
                         if h.author is None:
                             continue
                         if h.author.name == self.name:
-                            self.log("Already replied to this comment...\n", silent=True)
+                            self.log("Already replied to this comment...\n", silent=False)
                             return
             except:
                 self.log("Unknown error occured")
@@ -297,7 +320,13 @@ class GPT2Bot():
 
         self.log("Starting Submission Run... "+str(time.time()))
         submission = praw.models.Submission(self.reddit(), id=subm)
-        submission.comments.replace_more(limit=None)
+        while True:
+            try:
+                submission.comments.replace_more(limit=None)
+                break
+            except PossibleExceptions:
+                self.log('Handling replace_more exception')
+                time.sleep(1)
         with parallel_backend('threading', n_jobs=n_threads):
             Parallel()(delayed(do_work)(self, comment) for comment in tqdm.tqdm(submission.comments.list()) if comment is not None)
         self.log("SUBMISSION RUN DONE!!!\n\n============================================================\n", flush=True)
