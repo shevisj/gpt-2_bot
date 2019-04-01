@@ -21,6 +21,9 @@ import collections
 
 import model, sample, encoder
 
+import logging
+
+
 def clean_input(s):
     return ''.join(filter(lambda x: x in set(string.printable), s))
 
@@ -104,7 +107,7 @@ class GPT2Bot():
         try:
             self.reddit_2 = praw.Reddit('gptbot2')
         except:
-        self.reddit_2 = self.reddit_1
+            self.reddit_2 = self.reddit_1
         self.toggle = True
         self.rexp = re.compile(r"^(.*)gpt-2(.*)finish this(.*)$", re.IGNORECASE|re.DOTALL)
         self.name = self.reddit_1.user.me().name
